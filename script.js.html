@@ -1,0 +1,239 @@
+// App State & Database
+let usersList = JSON.parse(localStorage.getItem('hema_users_db')) || [
+    { email: 'user@gmail.com', password: '123', balance: 100.00, recharge: 500.00, activePlan: 'VIP 1 (৫০০ টাকা)', dailyEarnings: 223.00, videoDone: false, mathDone: false, quizDone: false }
+];
+
+let loggedInUserEmail = localStorage.getItem('hema_logged_email') || null;
+
+let withdrawRequests = JSON.parse(localStorage.getItem('hema_withdraws')) || [];
+let depositRequests = JSON.parse(localStorage.getItem('hema_deposits')) || [];
+
+let chatMessages = JSON.parse(localStorage.getItem('hema_chats')) || [
+    { sender: 'admin', text: 'আসসালামু আলাইকুম! HEMA সাপোর্টে আপনাকে স্বাগতম।', time: 'Now' }
+];
+
+let currentTab = 'home';
+let authMode = 'login'; // 'login', 'signup', 'forgot'
+let selectedPlanForPurchase = null;
+const officialDepositNumber = '01994500030';
+
+// Math & Quiz State
+let currentMath = { a: 0, b: 0, ans: 0 };
+let currentQuizIndex = 0;
+
+const quizQuestions = [
+    { q: "বাংলাদেশের রাজধানীর নাম কী?", options: ["খুলনা", "ঢাকা", "চট্টগ্রাম"], ans: "ঢাকা" },
+    { q: "বাংলাদেশের জাতীয় ফুল কোনটি?", options: ["গোলাপ", "শাপলা", "জবা"], ans: "শাপলা" },
+    { q: "এক সপ্তাহে কয়দিন হয়?", options: ["৫ দিন", "৭ দিন", "১০ দিন"], ans: "৭ দিন" },
+    { q: "সূর্য কোন দিকে উদিত হয়?", options: ["পশ্চিম", "উত্তর", "পূর্ব"], ans: "পূর্ব" }
+];
+
+const plansData = [
+    { id: 1, name: 'VIP 1 (৫০০ টাকা)', price: 500, daily: 223, duration: 30 },
+    { id: 2, name: 'VIP 2 (১০০০ টাকা)', price: 1000, daily: 450, duration: 30 },
+    { id: 3, name: 'VIP 3 (২০০০ টাকা)', price: 2000, daily: 920, duration: 30 },
+    { id: 4, name: 'VIP 4 (৫০০০ টাকা)', price: 5000, daily: 2400, duration: 30 },
+    { id: 5, name: 'VIP 5 (১০০০০ টাকা)', price: 10000, daily: 5000, duration: 30 }
+];
+
+function saveData() {
+    localStorage.setItem('hema_users_db', JSON.stringify(usersList));
+    localStorage.setItem('hema_logged_email', loggedInUserEmail);
+    localStorage.setItem('hema_withdraws', JSON.stringify(withdrawRequests));
+    localStorage.setItem('hema_deposits', JSON.stringify(depositRequests));
+    localStorage.setItem('hema_chats', JSON.stringify(chatMessages));
+}
+
+function getCurrentUser() {
+    return usersList.find(u => u.email === loggedInUserEmail) || null;
+}
+
+function switchTab(tab) {
+    if(!loggedInUserEmail && tab !== 'auth') {
+        currentTab = 'auth';
+        renderAuth();
+        return;
+    }
+    currentTab = tab;
+    renderContent();
+}
+
+function generateMath() {
+    currentMath.a = Math.floor(Math.random() * 20) + 5;
+    currentMath.b = Math.floor(Math.random() * 15) + 2;
+    currentMath.ans = currentMath.a + currentMath.b;
+}
+
+function renderContent() {
+    const main = document.getElementById('main-content');
+    const nav = document.getElementById('bottom-nav');
+
+    if (!loggedInUserEmail) {
+        nav.classList.add('hidden');
+        renderAuth();
+        return;
+    }
+
+    nav.classList.remove('hidden');
+    const user = getCurrentUser();
+
+    if(currentTab === 'home') {
+        main.innerHTML = `
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-700 p-4 rounded-xl shadow-lg text-white space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-blue-200">Welcome Back,</span>
+                    <span class="bg-blue-800/80 text-[10px] px-2 py-0.5 rounded-full border border-blue-400/40 font-semibold">${user.activePlan}</span>
+                </div>
+                <div class="font-bold text-sm truncate">${user.email}</div>
+                <div class="flex justify-between pt-2 border-t border-blue-500/40">
+                    <div>
+                        <div class="text-xs text-blue-200">Total balance (BDT)</div>
+                        <div class="text-xl font-extrabold">${user.balance.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-blue-200">Total Deposit</div>
+                        <div class="text-xl font-extrabold">${user.recharge.toFixed(2)}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Grid -->
+            <div class="grid grid-cols-4 gap-2 text-center text-xs">
+                <button onclick="switchTab('account')" class="bg-slate-900 p-3 rounded-xl border border-slate-800 hover:border-blue-500 flex flex-col items-center">
+                    <div class="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center mb-1 text-base"><i class="fa-solid fa-wallet"></i></div>
+                    <span>Account</span>
+                </button>
+                <button onclick="switchTab('plans')" class="bg-slate-900 p-3 rounded-xl border border-slate-800 hover:border-blue-500 flex flex-col items-center">
+                    <div class="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-1 text-base"><i class="fa-solid fa-plus-circle"></i></div>
+                    <span>Deposit</span>
+                </button>
+                <button onclick="openWithdrawModal()" class="bg-slate-900 p-3 rounded-xl border border-slate-800 hover:border-blue-500 flex flex-col items-center">
+                    <div class="w-10 h-10 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center mb-1 text-base"><i class="fa-solid fa-money-bill-transfer"></i></div>
+                    <span>Withdraw</span>
+                </button>
+                <button onclick="switchTab('plans')" class="bg-slate-900 p-3 rounded-xl border border-slate-800 hover:border-blue-500 flex flex-col items-center">
+                    <div class="w-10 h-10 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center mb-1 text-base"><i class="fa-solid fa-gem"></i></div>
+                    <span>VIP Plans</span>
+                </button>
+            </div>
+
+            <!-- Quick Task & Live Chat Cards -->
+            <div class="grid grid-cols-2 gap-3 pt-2">
+                <div onclick="switchTab('tasks')" class="bg-gradient-to-br from-indigo-900/60 to-slate-900 border border-indigo-700/50 p-4 rounded-xl cursor-pointer hover:border-indigo-500 transition">
+                    <i class="fa-solid fa-list-check text-indigo-400 text-2xl mb-2"></i>
+                    <h4 class="font-bold text-sm text-white">Daily Tasks</h4>
+                    <p class="text-xs text-slate-400 mt-1">Video, Math & Quiz earn.</p>
+                </div>
+                <div onclick="switchTab('chat')" class="bg-gradient-to-br from-blue-900/60 to-slate-900 border border-blue-700/50 p-4 rounded-xl cursor-pointer hover:border-blue-500 transition relative">
+                    <span class="absolute top-3 right-3 flex h-2.5 w-2.5">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    <i class="fa-solid fa-headset text-blue-400 text-2xl mb-2"></i>
+                    <h4 class="font-bold text-sm text-white">Live Chat</h4>
+                    <p class="text-xs text-slate-400 mt-1">Chat with admin live.</p>
+                </div>
+            </div>
+
+            <!-- Notice Banner -->
+            <div class="bg-gradient-to-r from-slate-900 to-blue-950/50 border border-blue-500/30 p-3.5 rounded-xl text-xs space-y-1.5">
+                <div class="font-bold text-amber-400 flex items-center">
+                    <i class="fa-solid fa-bullhorn mr-1.5"></i> বিশেষ নোটিশ: ৫০০ টাকায় প্রতিদিন ২২৩ টাকা ইনকাম!
+                </div>
+                <p class="text-slate-300 leading-relaxed">
+                    ভিডিও দেখে, অংক সমাধান করে এবং কুইজের উত্তর দিয়ে আপনার প্রতিদিনের আয় ব্যালেন্সে যোগ করে নিন।
+                </p>
+            </div>
+        `;
+    } else if(currentTab === 'tasks') {
+        const rewardPerTask = (user.dailyEarnings / 3).toFixed(2);
+        generateMath();
+        currentQuizIndex = Math.floor(Math.random() * quizQuestions.length);
+        const qData = quizQuestions[currentQuizIndex];
+
+        main.innerHTML = `
+            <div class="space-y-4 pb-8">
+                <div class="flex items-center space-x-3 border-b border-slate-800 pb-2.5 mb-2">
+                    <button onclick="switchTab('home')" class="bg-slate-900 hover:bg-blue-600 text-slate-200 hover:text-white w-8 h-8 rounded-full flex items-center justify-center border border-slate-700 transition shadow"><i class="fa-solid fa-arrow-left text-xs"></i></button>
+                    <h3 class="font-bold text-base text-blue-400">Daily Earning Tasks</h3>
+                </div>
+
+                <div class="flex justify-between items-center bg-slate-900 px-3 py-2 rounded-lg border border-slate-800">
+                    <span class="text-xs text-slate-400">Active: <strong class="text-white">${user.activePlan}</strong></span>
+                    <span class="text-[11px] bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-emerald-400 font-semibold">Per Task: ${rewardPerTask} BDT</span>
+                </div>
+
+                <!-- 1. Video Task -->
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h4 class="font-bold text-sm text-white"><i class="fa-solid fa-video text-blue-400 mr-1.5"></i> ১. ভিডিও দেখে ইনকাম</h4>
+                        <span class="text-xs font-bold text-emerald-400">+${rewardPerTask} BDT</span>
+                    </div>
+                    <div class="h-28 bg-black rounded-lg flex flex-col items-center justify-center relative overflow-hidden border border-slate-800">
+                        <div id="task-screen-msg" class="text-center p-2">
+                            <i class="fa-solid fa-circle-play text-3xl text-blue-500 mb-1"></i>
+                            <p class="text-[11px] text-slate-300">${user.videoDone ? 'আজকের ভিডিও টাস্ক সম্পন্ন হয়েছে' : 'ভিডিও দেখতে বাটনে ক্লিক করুন'}</p>
+                        </div>
+                        <div id="task-timer-box" class="hidden absolute inset-0 bg-black/90 flex flex-col items-center justify-center space-y-1">
+                            <div class="text-2xl font-bold text-emerald-400 font-mono" id="countdown-val">10</div>
+                            <div class="text-[11px] text-slate-400">ভিডিও চলছে... অপেক্ষা করুন</div>
+                        </div>
+                    </div>
+                    <button id="start-task-btn" onclick="startVideoTask(${rewardPerTask})" ${user.videoDone ? 'disabled' : ''} class="w-full ${user.videoDone ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'} py-2 rounded-lg text-xs font-semibold transition">
+                        ${user.videoDone ? 'Completed Today' : 'Start Video Task'}
+                    </button>
+                </div>
+
+                <!-- 2. Math Task -->
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h4 class="font-bold text-sm text-white"><i class="fa-solid fa-calculator text-emerald-400 mr-1.5"></i> ২. অংক করে ইনকাম</h4>
+                        <span class="text-xs font-bold text-emerald-400">+${rewardPerTask} BDT</span>
+                    </div>
+                    ${user.mathDone ? `
+                        <p class="text-xs text-slate-400 bg-slate-950 p-3 rounded-lg text-center border border-slate-800">আজকের অংক টাস্ক সম্পন্ন হয়েছে!</p>
+                    ` : `
+                        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 text-center space-y-2">
+                            <p class="text-xs text-slate-400">যোগফলটি কত হবে?</p>
+                            <div class="text-xl font-bold text-white font-mono">${currentMath.a} + ${currentMath.b} = ?</div>
+                            <div class="flex space-x-2 pt-1">
+                                <input type="number" id="math-answer-input" placeholder="উত্তর লিখুন" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white text-center focus:outline-none focus:border-emerald-500">
+                                <button onclick="submitMathTask(${rewardPerTask})" class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg text-xs font-semibold text-white">Submit</button>
+                            </div>
+                        </div>
+                    `}
+                </div>
+
+                <!-- 3. Quiz Task -->
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h4 class="font-bold text-sm text-white"><i class="fa-solid fa-circle-question text-purple-400 mr-1.5"></i> ৩. কুইজের উত্তর দিয়ে ইনকাম</h4>
+                        <span class="text-xs font-bold text-emerald-400">+${rewardPerTask} BDT</span>
+                    </div>
+                    ${user.quizDone ? `
+                        <p class="text-xs text-slate-400 bg-slate-950 p-3 rounded-lg text-center border border-slate-800">আজকের কুইজ টাস্ক সম্পন্ন হয়েছে!</p>
+                    ` : `
+                        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2.5">
+                            <p class="text-xs font-semibold text-slate-200">প্রশ্ন: ${qData.q}</p>
+                            <div class="grid grid-cols-3 gap-2">
+                                ${qData.options.map(opt => `
+                                    <button onclick="submitQuizTask('${opt}', '${qData.ans}',${rewardPerTask})" class="bg-slate-900 hover:bg-purple-600 border border-slate-700 hover:border-purple-500 py-2 rounded-lg text-xs text-white transition">
+                                        ${opt}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+    } else if(currentTab === 'plans') {
+        let html = `<div class="space-y-3 pb-6"><div class="flex items-center space-x-3 border-b border-slate-800 pb-2.5 mb-2"><button onclick="switchTab('home')" class="bg-slate-900 hover:bg-blue-600 text-slate-200 hover:text-white w-8 h-8 rounded-full flex items-center justify-center border border-slate-700 transition shadow"><i class="fa-solid fa-arrow-left text-xs"></i></button><h3 class="font-bold text-base text-blue-400">VIP Investment Plans</h3></div><div class="space-y-3">`;
+        plansData.forEach(p => {
+            html += `
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center">
+                    <div>
+                        <h4 class="font-bold text-sm text-white">${p.name}</h4>
+                        <p class="text-xs text-slate-400">Price: <span class="text-emerald-400 font-bold">${p.price} BDT</span></p>
+                        <p class="text-xs text-slate-400">Daily Earning: <span class="text-blue-400 font-bold">${p.daily} BDT</span> (${p.duration} Days)</p>
+                    </div>
